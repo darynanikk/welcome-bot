@@ -1,6 +1,9 @@
 import string
 
 import discord
+import asyncio
+
+from discord import ClientException
 from discord.ext import commands
 from discord.utils import get
 from gtts import gTTS
@@ -12,7 +15,6 @@ class Greetings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.voice_client = None
-        self._last_member = None
 
     def _play(self, file_name):
         source = discord.FFmpegPCMAudio(source=file_name)
@@ -30,13 +32,21 @@ class Greetings(commands.Cog):
     async def on_voice_state_update(self, member, before, after):
         user_name = member.name
         user_name_cleaned = user_name.translate(translation_table)
+
         if before.channel is None and after.channel:
-            if not member.bot and self._last_member != member:
-                self.voice_client = await after.channel.connect()
-                self.speak(f"Welcome, {user_name_cleaned}")
+            if not member.bot:
+                try:
+                    self.voice_client = await after.channel.connect()
+                    self.speak(f"Welcome, {user_name_cleaned}")
+                except ClientException:
+                    print("Bot is already connected.")
+                    self.voice_client.speak(f"Welcome, {user_name_cleaned}")
+                except TimeoutError:
+                    print(f"Cannot connect to the voice channel {after.channel.id}")
+
 
         elif before.channel and after.channel is None:
             bot_voice = get(self.bot.voice_clients, guild=member.guild)
             if bot_voice:
-                await bot_voice.disconnect()
-        self._last_member = member
+                bot_voice.stop()
+                await bot_voice.disconnect(force=True)
