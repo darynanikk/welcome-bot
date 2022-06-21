@@ -41,7 +41,7 @@ class Greetings(commands.Cog):
                 except ClientException:
                     print("Bot is already connected.")
                     self.voice_client.speak(f"Welcome, {user_name_cleaned}")
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     print(f"Cannot connect to the voice channel {after.channel.id}")
 
 
