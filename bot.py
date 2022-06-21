@@ -1,8 +1,6 @@
 import string
 import discord
-import asyncio
 
-from discord import ClientException
 from discord.ext import commands
 from discord.utils import get
 from gtts import gTTS
@@ -14,13 +12,11 @@ class Greetings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.voice_client = None
+        self._last_member = None
 
     def _play(self, file_name):
-        source = discord.FFmpegPCMAudio(source=file_name, options = "-loglevel panic")
-        try:
-            self.voice_client.play(source)
-        except ClientException:
-            print("Bot is playing something..")
+        source = discord.FFmpegPCMAudio(source=file_name, options="-loglevel panic")
+        self.voice_client.play(source)
 
     def speak(self, speech, lang='en'):
         tts = gTTS(text=speech, lang=lang)
@@ -32,23 +28,32 @@ class Greetings(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        user_name = member.name
+        user_name = member.name if self._last_member is None else self._last_member.name
         user_name_cleaned = user_name.translate(translation_table)
+        bot_voice = get(self.bot.voice_clients, guild=member.guild)
 
         if before.channel is None and after.channel:
+            if not bot_voice:
+                self.voice_client = await after.channel.connect(reconnect=True)
+                self.speak(f"Welcome, {user_name_cleaned}")
+            else:
+                if self.voice_client:
+                    if bot_voice.channel.id != after.channel.id:
+                        await bot_voice.disconnect(force=True)
+                        await bot_voice.move_to(after.channel)
+                    else:
+                        self.speak(f"Welcome, {user_name_cleaned}")
             if not member.bot:
-                try:
-                    self.voice_client = await after.channel.connect()
-                    self.speak(f"Welcome, {user_name_cleaned}")
-                except ClientException:
-                    print("Bot is already connected.")
-                    self.voice_client.speak(f"Welcome, {user_name_cleaned}")
-                except asyncio.TimeoutError:
-                    print(f"Cannot connect to the voice channel {after.channel.id}")
-
+                self._last_member = member
 
         elif before.channel and after.channel is None:
-            bot_voice = get(self.bot.voice_clients, guild=member.guild)
-            if bot_voice:
-                bot_voice.stop()
+            # only bot left in the guild
+            if bot_voice and len(bot_voice.guild.members) == 1:
+                self.voice_client = None
+                self._last_member = None
                 await bot_voice.disconnect(force=True)
+        else:
+            if self.voice_client:
+                if self.voice_client.is_playing():
+                    self.voice_client.stop()
+                return
