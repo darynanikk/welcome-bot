@@ -1,5 +1,4 @@
 import string
-
 import discord
 import asyncio
 
@@ -17,8 +16,11 @@ class Greetings(commands.Cog):
         self.voice_client = None
 
     def _play(self, file_name):
-        source = discord.FFmpegPCMAudio(source=file_name)
-        self.voice_client.play(source)
+        source = discord.FFmpegPCMAudio(source=file_name, options = "-loglevel panic")
+        try:
+            self.voice_client.play(source)
+        except ClientException:
+            print("Bot is playing something..")
 
     def speak(self, speech, lang='en'):
         tts = gTTS(text=speech, lang=lang)
